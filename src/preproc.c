@@ -31,7 +31,7 @@ static int is_ident_char(char c)
 
 static size_t read_ident(string_t* input, size_t* pos, char* buf, size_t buf_size)
 {
-    size_t start = *pos;
+    // size_t start = *pos;
     size_t len = 0;
     
     if(*pos < input->len && is_ident_char(input->data[*pos])){
@@ -54,7 +54,7 @@ static int parse_define(string_t* input, size_t* pos, macro_t* macro)
     
     skip_wspace(input, pos);
 
-    size_t value_start = *pos;
+    // size_t value_start = *pos;
     size_t value_len = 0;
     
     while(*pos < input->len && input->data[*pos] != '\n' && value_len < MAX_MACRO_VALUE - 1){
@@ -291,7 +291,7 @@ string_t* preprocess(string_t* input)
         if(pos >= input->len) break;
         
         if(input->data[pos] == '#'){
-            size_t directive_start = pos;
+            // size_t directive_start = pos;
             pos++;
             skip_wspace(input, &pos);
             
