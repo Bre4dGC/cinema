@@ -8,7 +8,6 @@ string_t* read_file(char* filename)
         return NULL;
     }
 
-    // Allocate memory for the input structure
     string_t* input = malloc(sizeof(string_t));
     if (!input) {
         fclose(source);
