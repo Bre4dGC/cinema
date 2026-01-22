@@ -8,7 +8,7 @@
 #include "utils.h"
 
 #define TOKEN_CAPACITY  256
-#define STRING_LENGTH   128
+#define STRING_LENGTH   1024
 #define LITER_LENGTH    32
 
 token_t tokens[] = {
@@ -74,11 +74,10 @@ token_t token_literal(lexer_t* lexer);
 token_t* tokenize(lexer_t* lexer)
 {
     token_t* tokens = malloc(sizeof(token_t) * TOKEN_CAPACITY);
-    for(size_t i = 0; lexer->ch != '\0'; ++i){
-        if(i >= TOKEN_CAPACITY){
-            tokens = realloc(tokens, sizeof(token_t) * (TOKEN_CAPACITY * 2));
-            if(!tokens) return NULL;
-        }
+    if(!tokens) return NULL;
+
+    size_t i = 0;
+    for(; lexer->ch != '\0'; ++i){
         skip_wspace(lexer);
 
         switch(lexer->ch){
@@ -102,15 +101,21 @@ token_t* tokenize(lexer_t* lexer)
                 if(isalnum(lexer->ch)) tokens[i] = token_literal(lexer);
                 else {
                     fprintf(stderr, "[Error] Illegal character: %c\n", lexer->ch);
-                    tokens[i] = (token_t){0};
+                    char* illegal = malloc(8);
+                    if(illegal) strcpy(illegal, "ILLEGAL");
+                    tokens[i] = (token_t){illegal, TOKEN_ILLEGAL};
                 }
                 break;
         }
 
         #ifdef DEBUG
-        printf("Token(%s, %u)\n", tokens[i].liter, tokens[i].kind);
+        printf("Token(%s, %u)\n", tokens[i].liter ? tokens[i].liter : "(null)", tokens[i].kind);
         #endif
     }
+    if(i < TOKEN_CAPACITY) {
+        tokens[i] = (token_t){"EOF", TOKEN_EOF};
+    }
+    
     return tokens;
 }
 
@@ -128,7 +133,6 @@ void skip_char(lexer_t *lexer)
         lexer->loc.col++;
     }
 }
-
 
 void skip_wspace(lexer_t* lexer)
 {
@@ -149,7 +153,7 @@ void skip_wspace(lexer_t* lexer)
 
 token_t token_operator(lexer_t* lexer)
 {
-    if(!lexer) return (token_t){0};
+    if(!lexer) return (token_t){NULL, TOKEN_ILLEGAL};
 
     char op[3] = {0};
     op[0] = lexer->ch;
@@ -161,25 +165,32 @@ token_t token_operator(lexer_t* lexer)
     }
     op[strlen(op)] = '\0';
 
+    size_t op_len = strlen(op) + 1;
+    char* op_str = malloc(op_len);
+    if(!op_str) return (token_t){NULL, TOKEN_ILLEGAL};
+    strcpy(op_str, op);
+
     size_t size = sizeof(tokens) / sizeof(token_t);
     for(size_t i = 0; i < size; ++i){
         if(strcmp(op, tokens[i].liter) == 0){
-            return (token_t){op, tokens[i].kind};
+            return (token_t){op_str, tokens[i].kind};
         }
     }
-    return (token_t){op, TOKEN_ILLEGAL};
+    return (token_t){op_str, TOKEN_ILLEGAL};
 }
 
 token_t token_string(lexer_t* lexer)
 {
-    if(!lexer) return (token_t){0};
+    if(!lexer) return (token_t){NULL, TOKEN_ILLEGAL};
     skip_char(lexer);
 
     char str_stack[STRING_LENGTH] = {0};
-    for(int i = 0; lexer->ch != '"'; ++i){
+    for(int i = 0; lexer->ch != '"' && lexer->ch != '\'' && lexer->ch != '\0'; ++i){
         if(i >= STRING_LENGTH){
             fprintf(stderr, "[Error] Out of string size\n");
-            return (token_t){0};
+            char* illegal = malloc(8);
+            if(illegal) strcpy(illegal, "ILLEGAL");
+            return (token_t){illegal, TOKEN_ILLEGAL};
         }
         str_stack[i] = lexer->ch;
         skip_char(lexer);
@@ -187,9 +198,8 @@ token_t token_string(lexer_t* lexer)
     skip_char(lexer);
 
     size_t str_len = strlen(str_stack) + 1;
-    str_stack[str_len] = '\0';
-
     char* str = malloc(str_len);
+    if(!str) return (token_t){NULL, TOKEN_ILLEGAL};
     strcpy(str, str_stack);
 
     return (token_t){str, TOKEN_STRING};
@@ -197,7 +207,7 @@ token_t token_string(lexer_t* lexer)
 
 token_t token_literal(lexer_t* lexer)
 {
-    if(!lexer) return (token_t){0};
+    if(!lexer) return (token_t){NULL, TOKEN_ILLEGAL};
 
     char liter[LITER_LENGTH] = {0};
     token_kind_t kind = 0;
@@ -208,11 +218,15 @@ token_t token_literal(lexer_t* lexer)
     for(int i = 0; isalnum(lexer->ch); ++i){
         if(i >= LITER_LENGTH){
             fprintf(stderr, "[Error] Out of literal size\n");
-            return (token_t){0};
+            char* illegal = malloc(8);
+            if(illegal) strcpy(illegal, "ILLEGAL");
+            return (token_t){illegal, TOKEN_ILLEGAL};
         }
         if(kind == TOKEN_NUMBER && !isdigit(lexer->ch)){
             fprintf(stderr, "[Error] Invalid number literal\n");
-            return (token_t){0};
+            char* illegal = malloc(8);
+            if(illegal) strcpy(illegal, "ILLEGAL");
+            return (token_t){illegal, TOKEN_ILLEGAL};
         }
         liter[i] = lexer->ch;
         skip_char(lexer);
@@ -229,21 +243,31 @@ token_t token_literal(lexer_t* lexer)
         }
     }
 
-    return (token_t){liter, kind};
-}
+    size_t liter_len = strlen(liter) + 1;
+    char* liter_str = malloc(liter_len);
+    if(!liter_str) return (token_t){NULL, TOKEN_ILLEGAL};
+    strcpy(liter_str, liter);
 
-void free_tokens(token_t* tokens)
-{
-    if(!tokens) return;
-    for(size_t i = 0; i < TOKEN_CAPACITY; ++i){
-        free(tokens[i].liter);
-    }
-    free(tokens);
+    return (token_t){liter_str, kind};
 }
 
 void free_lexer(lexer_t* lexer)
 {
     if(!lexer) return;
-    free_tokens(lexer->tokens);
+    if(lexer->tokens) {
+        free(lexer->tokens);
+    }
     free(lexer);
+}
+
+void free_tokens(token_t* tokens)
+{
+    if(!tokens) return;
+    for(size_t i = 0; i < TOKEN_CAPACITY; ++i) {
+        if(tokens[i].kind == TOKEN_EOF) break;
+        if(tokens[i].liter) {
+            free(tokens[i].liter);
+        }
+    }
+    free(tokens);
 }

@@ -97,3 +97,4 @@ typedef struct {
 lexer_t* new_lexer(string_t* input);
 token_t* tokenize(lexer_t* lexer);
 void free_lexer(lexer_t* lexer);
+void free_tokens(token_t* tokens);
